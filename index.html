@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>On This Day Widget</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300;1,6..72,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: transparent;
+            color: #37352f;
+        }
+
+        .font-serif-journal {
+            font-family: 'Newsreader', serif;
+        }
+    </style>
+</head>
+<body class="p-6 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-lg space-y-3">
+        <!-- Header -->
+        <div class="flex justify-between items-center border-b border-stone-200 dark:border-stone-800 pb-2">
+            <span id="widgetTitle" class="text-xs font-semibold uppercase tracking-widest text-stone-400">In questo giorno / An diesem Tag</span>
+            <span id="dateBadge" class="text-xs font-serif-journal italic text-stone-400"></span>
+        </div>
+
+        <!-- History Content List -->
+        <div id="historyList" class="space-y-3 py-1">
+            <p class="text-xs font-serif-journal italic text-stone-400">Caricamento eventi storici...</p>
+        </div>
+    </div>
+
+    <script>
+        // Free public translation helper
+        async function translateText(text, targetLang) {
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=de|${targetLang}`);
+                const data = await res.json();
+                if (data && data.responseData && data.responseData.translatedText) {
+                    return data.responseData.translatedText;
+                }
+            } catch (e) {}
+            return '';
+        }
+
+        async function fetchOnThisDay() {
+            const historyList = document.getElementById('historyList');
+            const dateBadge = document.getElementById('dateBadge');
+
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+
+            // Format nice date label for the badge
+            dateBadge.innerText = now.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+
+            try {
+                // Fetch historical selected events from Wikipedia REST API
+                const res = await fetch(`https://de.wikipedia.org/api/rest_v1/feed/onthisday/selected/${month}/${day}`);
+                const data = await res.json();
+
+                if (!data.selected || data.selected.length === 0) {
+                    throw new Error("No events found");
+                }
+
+                // Take top 3 events
+                const events = data.selected.slice(0, 3).map(item => ({
+                    year: item.year,
+                    textDe: item.text,
+                    textIt: '' 
+                }));
+
+                // Translate German excerpts into Italian concurrently
+                for (let evt of events) {
+                    evt.textIt = await translateText(evt.textDe, 'it');
+                }
+
+                renderHistory(events);
+
+            } catch (err) {
+                historyList.innerHTML = '<p class="text-xs font-serif-journal italic text-stone-400">Eventi non disponibili al momento.</p>';
+            }
+        }
+
+        function renderHistory(events) {
+            const historyList = document.getElementById('historyList');
+            
+            historyList.innerHTML = events.map(evt => `
+                <div class="space-y-1 border-b border-stone-200/60 pb-2.5 last:border-none">
+                    <p class="text-sm font-serif-journal text-stone-800 leading-snug">
+                        <span class="font-sans font-semibold text-stone-900">${evt.year}:</span> ${evt.textDe}
+                    </p>
+                    ${evt.textIt ? `<p class="text-xs font-serif-journal italic text-stone-500 leading-snug">${evt.textIt}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Run on load
+        window.onload = fetchOnThisDay;
+    </script>
+</body>
+</html>
